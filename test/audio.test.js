@@ -1,0 +1,26 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomBytes} from 'node:crypto';
+import {openDatabase,migrate} from '../src/db.js';
+import {getConfig} from '../src/config.js';
+import {seed} from '../src/seed.js';
+import {queueCommentary,generateAudio} from '../src/audio.js';
+import {createApp} from '../src/app.js';
+test('audio queue deduplicates, distinguishes wides, replaces corrections and gates licensed media',async t=>{
+  const config=getConfig({NODE_ENV:'test',DATABASE_PATH:':memory:',DATA_ENCRYPTION_KEY:randomBytes(32).toString('hex'),LOOKUP_HMAC_KEY:randomBytes(32).toString('hex')});
+  const db=await openDatabase(config);await migrate(db);await migrate(db);await seed(db,config);t.after(()=>db.close());
+  await db.query('DELETE FROM audio_clips');
+  const match={id:'ind-aus',status:'live',commentary:[{eventId:'innings1-ball2',over:'1.1',text:'One run.'},{eventId:'innings1-ball1',over:'1.1',text:'Wide ball.'}]};
+  await db.transaction(tx=>queueCommentary(tx,match,new Date().toISOString()));await db.transaction(tx=>queueCommentary(tx,match,new Date().toISOString()));
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM audio_clips')).rows[0].n,2);
+  match.commentary[0].text='Two runs.';await db.transaction(tx=>queueCommentary(tx,match,new Date().toISOString()));
+  assert.equal((await db.query("SELECT count(*)::int AS n FROM audio_clips WHERE status='pending'")).rows[0].n,2);
+  let requests=0;const fakeSpeech=async(url,options)=>{requests++;assert.equal(url,'https://api.openai.com/v1/audio/speech');assert.equal(JSON.parse(options.body).model,'gpt-4o-mini-tts');return new Response(new Uint8Array(64).fill(7),{status:200});};
+  assert.equal((await generateAudio(db,config,fakeSpeech)).disabled,true);assert.equal(requests,0);
+  const active={...config,audioEnabled:true,openaiKey:'test-only'};assert.equal((await generateAudio(db,active,fakeSpeech)).generated,2);assert.equal((await generateAudio(db,active,fakeSpeech)).generated,0);assert.equal(requests,2);
+  const server=createApp({db,config:active}).listen(0,'127.0.0.1');await new Promise(r=>server.on('listening',r));t.after(()=>new Promise(r=>server.close(r)));
+  const base=`http://127.0.0.1:${server.address().port}/api`;const playlist=await (await fetch(base+'/matches/ind-aus/audio')).json();assert.equal(playlist.data.clips.length,2);assert.match(playlist.data.disclosure,/AI-generated/);
+  const url=base.replace('/api','')+playlist.data.clips[0].url;const range=await fetch(url,{headers:{Range:'bytes=0-9'}});assert.equal(range.status,206);assert.equal((await range.arrayBuffer()).byteLength,10);
+  assert.equal((await fetch(url,{headers:{Range:'bytes=100-200'}})).status,416);
+  await db.query("UPDATE providers SET enabled=false WHERE id='demo'");assert.equal((await fetch(url)).status,404);assert.equal((await fetch(base+'/rankings')).status,200);const hidden=await(await fetch(base+'/history')).json();assert.equal(hidden.data.length,0);
+});

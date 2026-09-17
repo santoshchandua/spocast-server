@@ -1,0 +1,31 @@
+{
+  "name": "cricket-pulse-api",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "dev": "node --watch --env-file-if-exists=.env src/index.js",
+    "test": "node --test --test-concurrency=1",
+    "setup": "node scripts/setup.js",
+    "migrate": "node --env-file-if-exists=.env scripts/migrate.js",
+    "seed": "node --env-file-if-exists=.env scripts/seed.js",
+    "sync": "node --env-file-if-exists=.env scripts/sync.js",
+    "worker": "node --env-file-if-exists=.env scripts/worker.js",
+    "dev:otp": "node --env-file-if-exists=.env scripts/dev-otp.js",
+    "audio": "node --env-file-if-exists=.env scripts/audio.js",
+    "import:history": "node --env-file-if-exists=.env scripts/import-history.js"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.14",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "nodemailer": "^10.0.10",
+    "pg": "^8.16.3",
+    "stripe": "^18.5.0",
+    "zod": "^4.1.0"
+  }
+}
