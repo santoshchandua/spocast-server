@@ -39,3 +39,9 @@ Base path `/api`. Responses use `{ "data": ... }`; failures use `{ "error": ... 
 No password registration/login/reset endpoints. Optional email is not a login identifier. No public data-provider secrets, admin mutation, OTP retrieval or arbitrary audio synthesis endpoint.
 
 Schemas in src/phone-auth.js, src/cricket.js and src/history.js are authoritative. History import uses the private CLI, not the mobile API. All list sizes are bounded; ranking history snapshots are stored but browsing older snapshots is a future feature.
+
+## Detailed player statistics
+
+Player profiles now return batting, dismissals, bowling and fielding groups for T20, ODI and Test cricket. Canonical labels and definitions live in src/player-statistics.js. Imports support up to 300 statistics per profile and reject duplicate format/label pairs. Null means unavailable; explicit zero is preserved. Extra provider statistics are retained in an additional group.
+
+100s counts innings of 100+, 200s counts 200+, and 300s counts 300+; these overlap. 50s includes 50–99 and 90s includes 90–99 whether dismissed or unbeaten. Ducks require dismissal for zero. Golden ducks and diamond ducks are subsets. Dismissal statistics describe the batter; catches/run-outs under Fielding describe fielding contributions. Provider mappers must normalize to these definitions or use clearly separate labels. No missing figure is inferred.
