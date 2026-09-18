@@ -11,6 +11,9 @@ GRANT INSERT,UPDATE,DELETE ON otp_challenges,development_sms TO pulse_api;
 GRANT DELETE ON otp_challenges,development_sms TO pulse_worker;
 GRANT INSERT,UPDATE,DELETE ON audio_clips TO pulse_api,pulse_worker;
 GRANT USAGE,SELECT ON SEQUENCE audio_clips_sequence_seq TO pulse_api,pulse_worker;
+GRANT DELETE ON historical_profiles,achievements,ranking_snapshots,ranking_entries,cricket_records TO pulse_worker;
+GRANT DELETE ON cricket_series,series_player_statistics TO pulse_worker;
+GRANT UPDATE(profile_id) ON cricket_records TO pulse_worker;
 -- Signed provider ingestion uses the same API service in this deployment.
 GRANT INSERT,UPDATE,DELETE ON matches,teams,match_teams,sync_runs TO pulse_api, pulse_worker;
 GRANT UPDATE ON providers TO pulse_api, pulse_worker;

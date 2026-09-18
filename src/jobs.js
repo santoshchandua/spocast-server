@@ -28,4 +28,12 @@ export async function cleanup(db) {
   await db.query("DELETE FROM email_outbox WHERE created_at<now()-interval '7 days'");
   // Cricket retention is a contractual setting. Never infer a retention period from a pricing plan.
   await db.query("DELETE FROM matches m USING providers p WHERE m.provider_id=p.id AND p.id<>'demo' AND p.retention_days IS NOT NULL AND m.fetched_at<now()-p.retention_days*interval '1 day'");
+  await db.transaction(async tx => {
+    await tx.query("DELETE FROM cricket_series s USING providers p WHERE s.provider_id=p.id AND p.id<>'demo' AND p.retention_days IS NOT NULL AND s.updated_at<now()-p.retention_days*interval '1 day'");
+    await tx.query("DELETE FROM cricket_records r USING providers p WHERE r.provider_id=p.id AND p.id<>'demo' AND p.retention_days IS NOT NULL AND r.updated_at<now()-p.retention_days*interval '1 day'");
+    // Preserve a still-retained record while removing a stale profile association.
+    await tx.query("UPDATE cricket_records SET profile_id=NULL WHERE profile_id IN (SELECT h.id FROM historical_profiles h JOIN providers p ON p.id=h.provider_id WHERE p.id<>'demo' AND p.retention_days IS NOT NULL AND h.updated_at<now()-p.retention_days*interval '1 day')");
+    await tx.query("DELETE FROM historical_profiles h USING providers p WHERE h.provider_id=p.id AND p.id<>'demo' AND p.retention_days IS NOT NULL AND h.updated_at<now()-p.retention_days*interval '1 day'");
+    await tx.query("DELETE FROM ranking_snapshots s USING providers p WHERE s.provider_id=p.id AND p.id<>'demo' AND p.retention_days IS NOT NULL AND s.fetched_at<now()-p.retention_days*interval '1 day'");
+  });
 }

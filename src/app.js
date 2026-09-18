@@ -7,6 +7,7 @@ import { createBilling, mountBilling, entitlements } from './billing.js';
 import { projection, receiveFeed } from './cricket.js';
 import { mountAudio } from './audio.js';
 import { mountHistory } from './history.js';
+import { mountSeries } from './series.js';
 
 export function createApp({ db, config, billing = createBilling(config), otp }) {
   const app = express(); app.disable('x-powered-by'); app.set('trust proxy', config.trustProxy);
@@ -36,7 +37,7 @@ export function createApp({ db, config, billing = createBilling(config), otp }) 
   app.use((req, res, next) => { if (['POST','PATCH'].includes(req.method) && !req.is('application/json')) return next(new ApiError(415, 'JSON content type required')); next(); });
   app.use(authMiddleware(db, config));
   mountAuth(app, db, config, otp); mountBilling(app, db, config, billing);
-  mountAudio(app,db,config); mountHistory(app,db,config);
+  mountAudio(app,db,config); mountHistory(app,db,config); mountSeries(app,db);
   const result = (res, data) => res.json({ data });
   const hydrate = row => ({ ...row.payload, dataMode: row.provider_id === 'demo' ? 'demo' : 'licensed', providerUpdatedAt: row.provider_updated_at, fetchedAt: row.fetched_at, stale: row.provider_id !== 'demo' && row.status === 'live' && Date.now() - new Date(row.fetched_at).getTime() > 60000 });
   app.get('/api/matches', async (req, res) => {
@@ -79,3 +80,4 @@ export function createApp({ db, config, billing = createBilling(config), otp }) 
   });
   return app;
 }
+

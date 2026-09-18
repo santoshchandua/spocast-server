@@ -1,0 +1,46 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
+import { calculateSeriesStatistics, importSeries } from '../src/series.js';
+import { getConfig } from '../src/config.js';
+import { openDatabase, migrate } from '../src/db.js';
+import { seed } from '../src/seed.js';
+import { createApp } from '../src/app.js';
+import { cleanup } from '../src/jobs.js';
+
+test('series rates use correct denominators and preserve unknown/zero values',()=>{
+  const s=calculateSeriesStatistics({runs:100,dismissals:2,innings:3,ballsFaced:80,runsConceded:30,legalBalls:25,wickets:3});
+  assert.equal(s.battingAverage,50); assert.equal(s.strikeRate,125); assert.equal(s.economy,7.2); assert.equal(s.bowlingAverage,10);
+  assert.equal(calculateSeriesStatistics({runs:0,dismissals:1}).battingAverage,0);
+  assert.equal(calculateSeriesStatistics({runs:100,dismissals:0}).battingAverage,null);
+  assert.equal(calculateSeriesStatistics({}).economy,null);
+  assert.throws(()=>calculateSeriesStatistics({innings:1,dismissals:2}));
+  assert.throws(()=>calculateSeriesStatistics({threeWicketHauls:1,fiveWicketHauls:2}));
+});
+test('series API sorts, filters, isolates licenses and expires snapshots',async t=>{
+  const config=getConfig({NODE_ENV:'test',DATABASE_PATH:':memory:',DATA_ENCRYPTION_KEY:randomBytes(32).toString('hex'),LOOKUP_HMAC_KEY:randomBytes(32).toString('hex')});
+  const db=await openDatabase(config); await migrate(db); await seed(db,config);
+  const server=createApp({db,config}).listen(0,'127.0.0.1'); await new Promise(resolve=>server.on('listening',resolve));
+  t.after(async()=>{await new Promise(resolve=>server.close(resolve));await db.close();});
+  const call=async path=>{const r=await fetch(`http://127.0.0.1:${server.address().port}/api${path}`);return {status:r.status,...await r.json()};};
+  assert.equal((await call('/series')).data.series.length,2);
+  assert.equal((await call('/series/demo_demo-t20/statistics')).data.players[0].name,'Arjun Rao');
+  const economy=await call('/series/demo_demo-t20/statistics?metric=economy');
+  assert.equal(economy.data.players.length,1); assert.equal(Number(economy.data.players[0].value),6.84);
+  assert.equal((await call('/series/demo_demo-t20/statistics?metric=stumpings')).data.players[0].name,'Dev Shah');
+  assert.equal((await call('/series/demo_demo-t20/statistics?minBalls=1000')).data.players.length,0);
+  assert.equal((await call('/series/demo_demo-t20/statistics?metric=bad')).status,400);
+  assert.equal((await call('/series/missing/statistics')).status,404);
+  const snapshot={id:'cup',name:'Cup',format:'T20',sourceLabel:'Licensed test',players:[{id:'a',name:'A',team:'A',statistics:{runs:0}}]};
+  await assert.rejects(()=>db.transaction(tx=>importSeries(tx,'licensed',snapshot)),/license/);
+  await db.query("UPDATE providers SET enabled=true,license_reference='test',license_expires_at=now()+interval '1 day',retention_days=1 WHERE id='licensed'");
+  await db.transaction(tx=>importSeries(tx,'licensed',snapshot));
+  assert.equal((await call('/series/licensed_cup/statistics')).data.players.length,1);
+  await assert.rejects(()=>db.transaction(tx=>importSeries(tx,'licensed',{...snapshot,players:[...snapshot.players,...snapshot.players]})));
+  assert.equal((await call('/series/licensed_cup/statistics')).data.players.length,1);
+  await db.query("UPDATE providers SET license_expires_at=now()-interval '1 day' WHERE id='licensed'");
+  assert.equal((await call('/series/licensed_cup/statistics')).status,404);
+  await db.query("UPDATE cricket_series SET updated_at=now()-interval '2 days' WHERE provider_id='licensed'");
+  await cleanup(db);
+  assert.equal((await db.query("SELECT * FROM series_player_statistics WHERE series_id='licensed_cup'")).rows.length,0);
+});

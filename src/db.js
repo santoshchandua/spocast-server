@@ -1,6 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import pg from 'pg';
 import { PGlite } from '@electric-sql/pglite';
+import { acquireDatabaseLock } from './database-lock.js';
 
 export async function openDatabase(config) {
   if (config.databaseMode === 'postgres') {
@@ -16,12 +17,24 @@ export async function openDatabase(config) {
     await db.query('SELECT 1'); return db;
   }
   if (config.production) throw new Error('Embedded database is development-only');
-  const client = new PGlite(config.databasePath === ':memory:' ? undefined : config.databasePath);
-  await client.waitReady;
+  const releaseLock = await acquireDatabaseLock(config.databasePath);
+  let client;
+  try {
+    client = new PGlite(config.databasePath === ':memory:' ? undefined : config.databasePath);
+    await client.waitReady;
+  } catch (error) { await releaseLock(); throw error; }
   // Serialize local operations so requests cannot interleave with a transaction on one connection.
   let pending = Promise.resolve();
   const serial = fn => { const next = pending.then(fn); pending = next.catch(() => {}); return next; };
-  return { query: (sql, values = []) => serial(() => client.query(sql, values)), transaction: fn => serial(() => client.transaction(tx => fn(tx))), close: () => serial(() => client.close()) };
+  let closed = false;
+  return { query: (sql, values = []) => serial(() => client.query(sql, values)), transaction: fn => serial(() => client.transaction(tx => fn(tx))), close: () => serial(async () => { if (closed) return; await client.close(); closed = true; await releaseLock(); }) };
+}
+export async function requireCurrentSchema(db) {
+  const files = (await readdir(new URL('../migrations/', import.meta.url))).filter(n => /^\d+_[a-z_]+\.sql$/.test(n));
+  let applied;
+  try { applied = new Set((await db.query('SELECT version FROM schema_migrations')).rows.map(r => r.version)); }
+  catch { throw new Error('Database schema is missing. Run npm run migrate before starting the API or worker.'); }
+  if (files.some(file => !applied.has(file.replace('.sql', '')))) throw new Error('Database migrations are pending. Stop the service and run npm run migrate before restarting.');
 }
 export async function migrate(db) {
   const exists = await db.query("SELECT to_regclass('public.schema_migrations') AS name");

@@ -2,7 +2,7 @@
 
 ## Local development
 
-Node 22.13+ is required. In this repository root, run:
+Node 22.13+ is required. In `server`, run:
 
 ```sh
 npm ci
@@ -12,7 +12,7 @@ npm run seed
 npm start
 ```
 
-In the separate spocast mobile repository:
+In a second terminal, inside `mobile`:
 
 ```sh
 npm ci
@@ -21,11 +21,11 @@ npm start
 
 Use Expo Go compatible with SDK 55 or a development build. The app detects Expo's LAN address for port 4000. To override, set `EXPO_PUBLIC_API_URL` in `mobile/.env`. Release builds require an HTTPS URL. Browser development uses http://localhost:8081 and must exactly match `ALLOWED_ORIGINS`.
 
-`npm run setup` creates random local secrets in `.env` without displaying them. It never overwrites an existing file. `.env` and `.data` are intentionally excluded from source archives. Do not lose the keys for data you intend to retain.
+`npm run setup` creates random local secrets in `server/.env` without displaying them. It never overwrites an existing file. `.env` and `.data` are intentionally excluded from source archives. Do not lose the keys for data you intend to retain.
 
-PGlite persists to `.data/postgres` and must have ONE owning process. Stop the API before running migrations, seeding, operator commands or the development OTP viewer against that directory. Tests use independent in-memory databases. For separate workers use PostgreSQL.
+PGlite persists to `server/.data/postgres` and must have ONE owning process. Stop the API before running migrations, seeding, operator commands or the development OTP viewer against that directory. An adjacent .lock file now enforces ownership. After an unclean shutdown, verify the owner has stopped before manually removing only that lock file; never delete the database to clear a lock. Stop older application versions before upgrading because they do not honor the lock. Tests use independent in-memory databases. For separate workers use PostgreSQL.
 
-Phone OTP is the only sign-in method. Setup enables OTP_PROVIDER=development: no real SMS is sent. For an existing installation, add that setting to the private .env. Enter full name, E.164 mobile number (for example +91 followed by ten digits), and optional email. Click Send OTP, then stop the embedded API and run:
+Phone OTP is the only sign-in method. Setup enables OTP_PROVIDER=development: no real SMS is sent. For an existing installation, add that setting to the private server/.env. Enter full name, E.164 mobile number (for example +91 followed by ten digits), and optional email. Click Send OTP, then stop the embedded API and run:
 
 ```sh
 npm run dev:otp
@@ -40,13 +40,13 @@ Optional actual PostgreSQL: configure a unique POSTGRES_PASSWORD and start `infr
 ## Production database and API
 
 1. Provision private managed PostgreSQL, TLS certificates/CA, application compute, TLS ingress, secret manager and SMS verification provider. Docker/psql were not available for deployment in the implementation environment.
-2. Start from `.env.production.example`. Inject secrets outside source control. Use a separate migration identity; run `npm run migrate` once per release before switching traffic.
+2. Start from `server/.env.production.example`. Inject secrets outside source control. Use a separate migration identity; run `npm run migrate` once per release before switching traffic.
 3. Review/apply `infra/runtime-grants.sql`. Give the API and worker distinct managed login identities that inherit only their required roles. Do not use the owner account in the API.
 4. Provision plans using the operator CLI and your real approved pricing JSON. Production demo seeding is disabled. Configure the licensed provider record through the operator CLI.
 5. Build the API image from the `server` directory. Run API and worker separately, with a read-only container filesystem where possible. Inject secrets through the deployment platform. Set HOST=0.0.0.0 only when needed inside a private container network, and restrict ingress.
 6. Terminate HTTPS at the trusted ingress or configure TLS_CERT_FILE/TLS_KEY_FILE in Node. Set the exact trusted proxy CIDRs and prevent clients from reaching the origin directly. Public HTTP is rejected in production.
 7. Use a same-site deployment for web/app API (for example app.example.com and api.example.com). SameSite=Strict cookies intentionally do not support arbitrary cross-site embeds.
-8. Run `npm run worker` against PostgreSQL. It generates audio, dispatches optional email, syncs the licensed feed when enabled, and runs cleanup. Current sync cadence is 30 seconds; adjust only to licensed rate limits and measured load.
+8. Run `npm run worker` against PostgreSQL. It generates audio, dispatches optional email, syncs the licensed feed when enabled, and runs cleanup. Each job has an independent error boundary so an upstream failure does not skip cleanup. Each cycle waits 30 seconds after its jobs finish; adjust only to licensed rate limits and measured load.
 9. Configure readiness checks, restarts, metrics, backups, restore drills, alerts and operational ownership before launch.
 
 ## Cricket provider adapter
@@ -77,7 +77,7 @@ Canonical top-level payload:
 }
 ```
 
-`src/cricket.js` defines the strict complete schema. HTTP poll configuration uses CRICKET_FEED_URL, CRICKET_FEED_HOST and CRICKET_FEED_TOKEN (Bearer). Redirects are rejected. Configure network egress to the provider host. CRICKET_LICENSE_CONFIRMED=true plus a current enabled database license record are both required.
+`server/src/cricket.js` defines the strict complete schema. HTTP poll configuration uses CRICKET_FEED_URL, CRICKET_FEED_HOST and CRICKET_FEED_TOKEN (Bearer). Redirects are rejected. Configure network egress to the provider host. CRICKET_LICENSE_CONFIRMED=true plus a current enabled database license record are both required.
 
 Push ingestion: POST `/api/webhooks/cricket` using application/json and these headers:
 
@@ -103,7 +103,7 @@ Before taking money, finish refund/dispute handling and periodic reconciliation,
 
 ## Operator commands
 
-Run from this repository root on an authorized private maintenance host with audited access. These are not HTTP admin routes.
+Run from `server` on an authorized private maintenance host with audited access. These are not HTTP admin routes.
 
 ```sh
 node --env-file=.env scripts/operator.js status
@@ -143,6 +143,17 @@ Audio is generated once per content fingerprint and reused by all app users. Eac
 
 With embedded development, stop the API and run npm run audio, then restart it. This invokes the configured paid speech API only when enabled and keyed. Use PostgreSQL for a continuous worker alongside the API. Actual sound generation and physical-device playback require acceptance testing; mocked audio tests do not validate sound quality.
 
-Archive ingestion: map your licensed source to the strict historySchema in src/history.js and run npm run import:history -- approved-history.json from the backend. Profiles contain statistics and achievements; rankings include format, gender, category, asOf, sourceLabel and entries; records are a complete provider snapshot. Imports are transactional. Current API history/records lists cap at 100; large archives need cursor pagination. Contractual deletion of archives needs an operator process; the match retention cleanup does not yet purge historical profiles/rankings/records.
+Archive ingestion: map your licensed source to the strict historySchema in src/history.js and run npm run import:history -- approved-history.json from the backend. Profiles contain statistics and achievements; rankings include format, gender, category, asOf, sourceLabel and entries; records are a complete provider snapshot. Imports are transactional. Current API history/records lists cap at 100; large archives need cursor pagination. Migration 005 adds indexed archive retention. Cleanup removes licensed profiles, achievements, ranking snapshots/entries and records after the configured provider retention window, measured from ingestion/update time rather than sporting dates. Reimports refresh that time. Confirm this policy matches your contract; license expiry hides data but does not immediately erase it. Use npm run cleanup for one-shot maintenance, stopping the embedded API first. API and worker startup refuse missing migrations. Existing ranking snapshots start their retention clock when migration 005 is applied.
 
 For UPI, enable approved UPI/UPI AutoPay methods in the Razorpay merchant account. Hosted subscription checkout determines eligible methods for the device/account. This code never collects a UPI PIN or treats a redirect as payment proof. Native digital purchases remain disabled pending store billing integration and review. See [Razorpay UPI](https://razorpay.com/docs/payments/payment-methods/upi/) and [OpenAI speech guide](https://developers.openai.com/api/docs/guides/text-to-speech).
+
+
+## Series import
+
+Apply migration 006 before starting the new API. On the private maintenance host, run `npm run import:series -- approved-series.json`. The importer replaces one complete series snapshot transactionally and rejects duplicate players. Map the licensed provider to `seriesSchema` in src/series.js. Real series statistics are not inferred from incomplete match scorecards. The demo seed includes two fictional competitions.
+
+Example input:
+```json
+{"id":"cup-2026","name":"Approved Cup","format":"T20","sourceLabel":"Licensed provider","players":[{"id":"player-1","name":"Player Name","team":"IND","statistics":{"matches":5,"innings":5,"runs":250,"ballsFaced":180,"dismissals":4,"centuries":1,"fifties":1,"sixes":12,"fours":20,"wickets":0,"catches":3,"stumpings":0,"runsConceded":0,"legalBalls":0,"threeWicketHauls":0,"fiveWicketHauls":0}}]}
+```
+Omitted counts are unknown, not zero. Batting average uses runs/dismissals; strike rate uses runs/balls faced times 100; economy uses conceded runs/legal balls times 6; bowling average uses conceded runs/wickets. Zero denominators yield unavailable rates. Centuries count innings of 100+ and fifties count 50–99. Three/five-wicket hauls count innings of 3+/5+ wickets and overlap. The provider mapper must supply those counters consistently. Retention deletes expired licensed series snapshots and their player statistics.

@@ -45,3 +45,9 @@ Schemas in src/phone-auth.js, src/cricket.js and src/history.js are authoritativ
 Player profiles now return batting, dismissals, bowling and fielding groups for T20, ODI and Test cricket. Canonical labels and definitions live in src/player-statistics.js. Imports support up to 300 statistics per profile and reject duplicate format/label pairs. Null means unavailable; explicit zero is preserved. Extra provider statistics are retained in an additional group.
 
 100s counts innings of 100+, 200s counts 200+, and 300s counts 300+; these overlap. 50s includes 50–99 and 90s includes 90–99 whether dismissed or unbeaten. Ducks require dismissal for zero. Golden ducks and diamond ducks are subsets. Dismissal statistics describe the batter; catches/run-outs under Fielding describe fielding contributions. Provider mappers must normalize to these definitions or use clearly separate labels. No missing figure is inferred.
+
+## Series statistics
+
+GET /api/series?offset=0 returns {series,nextOffset} (100 per page).
+GET /api/series/:id/statistics?metric=runs&offset=0&minInnings=0&minBalls=0 returns {series,metrics,metric,players,nextOffset}.
+Allowed metrics: runs, centuries, fifties, battingAverage, strikeRate, sixes, fours, wickets, economy, bowlingAverage, threeWicketHauls, fiveWicketHauls, catches, stumpings. Economy/bowling average sort ascending; others descending. Null values are omitted from leaderboards; supplied zeros remain. Equal values use name/player ID for stable ordering. Minimum innings means batting innings; minimum balls means legal balls for bowling metrics and balls faced otherwise. No official qualification rule is implied.

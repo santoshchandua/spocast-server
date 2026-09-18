@@ -6,7 +6,7 @@ Node.js / Express API with PostgreSQL, licensed cricket ingestion, phone OTP acc
 
 Use Node 22.13+. Run npm ci, npm run setup, npm run migrate, npm run seed, then npm start. The API listens on port 4000. Setup generates private local secrets and enables development OTP; no real SMS is sent. Stop the embedded API before npm run dev:otp to inspect your locally queued test code, then restart it.
 
-Run npm test for 13 integration checks. Embedded PGlite is development-only and must have one owning process. Production requires managed PostgreSQL, verified TLS and configured Twilio Verify.
+Run npm test for 20 automated checks. Embedded PGlite is development-only and must have one owning process. Production requires managed PostgreSQL, verified TLS and configured Twilio Verify.
 
 ## Features and limits
 
@@ -23,3 +23,5 @@ This is a production-oriented foundation, not a completed commercial deployment.
 - [Validation](docs/VALIDATION.md)
 
 Source excludes .env, databases, logs, dependency folders and credentials. Demo data is fictional. No hosted CI workflow is included.
+
+Latest update: Matches combines scores and fixtures with a top Fixtures filter. Series provides batting, bowling and fielding leaderboards. Backend migrations 005/006 add archive retention and series statistics; the API requires current migrations. Series data remains fictional until the licensed importer is configured.

@@ -15,8 +15,10 @@
     "seed": "node --env-file-if-exists=.env scripts/seed.js",
     "sync": "node --env-file-if-exists=.env scripts/sync.js",
     "worker": "node --env-file-if-exists=.env scripts/worker.js",
+    "cleanup": "node --env-file-if-exists=.env scripts/cleanup.js",
     "dev:otp": "node --env-file-if-exists=.env scripts/dev-otp.js",
     "audio": "node --env-file-if-exists=.env scripts/audio.js",
+    "import:series": "node --env-file-if-exists=.env scripts/import-series.js",
     "import:history": "node --env-file-if-exists=.env scripts/import-history.js"
   },
   "dependencies": {
@@ -29,3 +31,4 @@
     "zod": "^4.1.0"
   }
 }
+

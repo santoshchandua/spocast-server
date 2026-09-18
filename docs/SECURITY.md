@@ -12,7 +12,7 @@ Protecting customer and business data requires application controls plus properl
 - API: strict input schemas, body size caps, SQL value binding, shared database rate limits, OTP challenge responses without verification codes, request IDs and sanitized server errors. No secret, token, password, email address or raw payment payload logging.
 - Provider intake: pinned configured HTTPS hostname, no redirects, timeouts and size limits, licensed-provider gate, five-minute signed push timestamps, event deduplication and stale snapshot rejection.
 - Billing: server-selected plan and price checks, local ownership mapping, unique checkout intent, signature verification on raw bytes, authoritative subscription retrieval, short reconciliation lease, transactional event processing and entitlement expiry. Card numbers/CVV never enter the application database.
-- Privileged operations: no public admin endpoints. Operator CLI requires private database access. Public registration cannot assign roles.
+- Privileged operations: no public admin endpoints. Operator CLI requires private server/database access. Public registration cannot assign roles.
 - Ads: text-only approved creatives, HTTPS destination links, no arbitrary HTML/scripts, no third-party tracking SDK. Optional consent defaults to false.
 
 ## Required infrastructure
@@ -39,7 +39,7 @@ Protecting customer and business data requires application controls plus properl
 
 Account deletion first suspends access and revokes sessions. An authorized operator must cancel/reconcile subscriptions, process the provider's customer-erasure procedure as appropriate, then run `finalize-deletion`. The CLI erases account fields, devices, favorites, sessions and preferences while retaining minimal accounting references. Set a jurisdiction-appropriate billing/audit retention schedule with counsel; this code does not establish a legal retention period.
 
-Worker cleanup removes expired OTP challenges and one-day-old audio; expired rate counters; old sessions/action tokens; and queued email older than seven days. Configured cricket retention applies to stored match snapshots. It does not remove billing/audit history automatically. Backups and third-party systems must be included in deletion/retention procedures.
+Worker cleanup removes expired OTP challenges and one-day-old audio; expired rate counters; old sessions/action tokens; and queued email older than seven days. Configured cricket retention applies to stored match snapshots and licensed archive profiles, achievements, rankings and records, measured from ingestion/update timestamps. Cleanup runs even when another worker job fails. Embedded development databases reject concurrent owners; API and worker startup require the current schema. It does not remove billing/audit history automatically. Backups and third-party systems must be included in deletion/retention procedures.
 
 Keys currently use one active v1 key; production key rotation needs a reviewed maintenance job to decrypt/re-encrypt PII and rebuild phone/email HMACs using old and new keys transactionally. Changing environment keys alone makes existing records unreadable. Keep recovery keys under separate access control.
 
@@ -51,3 +51,4 @@ Keys currently use one active v1 key; production key rotation needs a reviewed m
 - [Stripe subscription events](https://docs.stripe.com/billing/subscriptions/webhooks)
 - [Google Play backend verification](https://developer.android.com/google/play/billing/security)
 - [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
+

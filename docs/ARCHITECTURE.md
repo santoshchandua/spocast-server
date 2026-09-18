@@ -30,7 +30,7 @@ flowchart LR
 
 ## Table inventory and index strategy
 
-The schema is in `migrations/001_initial.sql`. Primary keys and unique constraints create indexes automatically. Additional indexes support observed access patterns rather than indexing every column.
+The schema is in `server/migrations/001_initial.sql`. Primary keys and unique constraints create indexes automatically. Additional indexes support observed access patterns rather than indexing every column.
 
 | Domain | Tables | Principal indexes / constraints |
 | --- | --- | --- |
@@ -76,3 +76,5 @@ Delivered: transparent update timestamps and delay flags, personal match followi
 Prioritize next: licensed delivery-level timelines; spoiler-free mode; configurable wicket/innings alerts and quiet hours; low-bandwidth/offline match summaries; accessible score announcements; Hindi and regional-language editorial support; player comparisons; women's/domestic cricket discovery. Each needs product decisions, licensed content, device testing and measurable acceptance criteria.
 
 Predictive models come after a licensed historical dataset: use time-based train/test separation, publish calibration and Brier scores, measure data leakage, monitor drift, and show uncertainty. The current pace projection is arithmetic, not an AI model, win probability, betting tip, or claimed advantage over Cricbuzz.
+
+Series statistics use cricket_series (provider ownership, format, provenance, indexed ingestion timestamp) and series_player_statistics (composite series/player primary key, validated aggregate counters and calculated rates). API reads require an enabled, unexpired provider license. Snapshots import transactionally through a private CLI, with cascade deletion and provider retention. The Matches tab combines scores and fixtures; top filters include Fixtures. Series has its own competition selector and leaderboards.
